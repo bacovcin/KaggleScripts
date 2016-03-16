@@ -7,7 +7,7 @@ from sklearn import ensemble as ens
 from sklearn import linear_model as lm
 from sklearn import calibration
 from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA, FastICA
+from sklearn.decomposition import PCA  # , FastICA
 # from sklearn import neighbors as nb
 from sklearn.metrics import log_loss
 from sklearn.naive_bayes import GaussianNB
@@ -244,19 +244,17 @@ if __name__ == "__main__":
     testxunscaled = np.array(test)
 
     # Normalize features for non-treebased methods
+    print('Normalizing...')
     ppMod = StandardScaler.fit(xunscaled)
     xscaled = ppMod.transform(xunscaled)
     testxscaled = ppMod.transform(testxunscaled)
 
     # Run PCA and ICA analysis to meet Naive Bayes assumptions
+    print('Calculating PCA...')
     pcaMod = PCA().fit(xscaled)
 
-    xpca = pcaMod.transform(xscaled)
-    testxpca = pcaMod.transform(testxscaled)
-
-    icaMod = FastICA().fit(xpca)
-    x = icaMod.transform(xpca)
-    testx = icaMod.transform(testxpca)
+    x = pcaMod.transform(xscaled)
+    testx = pcaMod.transform(testxscaled)
 
     # Load test IDs
     testIDs = np.array(pd.read_csv('../testids.csv'))[:, 0]
