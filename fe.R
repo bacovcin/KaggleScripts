@@ -86,33 +86,29 @@ dummy.mod<-dummyVars(ID ~ ., data = train.cat2)
 train.dummies<-predict(dummy.mod,newdata=train.cat2)
 test.dummies<-predict(dummy.mod,newdata=test.cat2)
 
-# Generate random effects models to capture the information from categorical variables with:
-# (1) Too many levels
-# (2) Levels that aren't shared across train and test set
+# Convert some categorical variables to their training set frequencies
 
-y = train.num[,2]
-
-glmdat<-as.data.frame(cbind(y,train.rands))
-
-train.rand.cols = data.frame(ID=train.num[,1])
-test.rand.cols = data.frame(ID=test.num[,1])
+train.rand.cols<-as.data.frame(rep(0,dim(train.rands)[1]))
+test.rand.cols<-as.data.frame(rep(0,dim(test.rands)[1]))
+for (i in 1:(length(rands)-1)) {
+  train.rand.cols <- as.data.frame(cbind(train.rand.cols,as.data.frame(rep(0,dim(train.rands)[1]))))
+  test.rand.cols <- as.data.frame(cbind(test.rand.cols,as.data.frame(rep(0,dim(test.rands)[1]))))
+}
 
 for (i in 1:length(rands)) {
+  names(train.rand.cols)[i]<-rands[i]
+  names(test.rand.cols)[i]<-rands[i]
   print(i)
-  temp.mod <- glmer(data=glmdat,as.formula(paste0('y~1+(1|',rands[i],')')),
-                    family='binomial',verbose=2,
-                    control = glmerControl(optimizer = "bobyqa",calc.derivs = FALSE))
-  train.rand.cols<-as.data.frame(cbind(train.rand.cols,predict(temp.mod,
-                                                               newdata=train.rands,
-                                                               allow.new.levels=T,
-                                                               type='response')))  
-  names(train.rand.cols)[dim(train.rand.cols)[2]] <- rands[i]
-  test.rand.cols<-as.data.frame(cbind(test.rand.cols,predict(temp.mod,
-                                                               newdata=test.rands,
-                                                               allow.new.levels=T,
-                                                               type='response')))
-  names(test.rand.cols)[dim(test.rand.cols)[2]] <- rands[i]
+  temp.tbl <- prop.table(table(train.rands[,i]))
+  train.rands[,i] <- as.character(train.rands[,i])
+  for (j in 1:length(names(temp.tbl))) {
+    print(j)
+    name <- names(temp.tbl)[j]
+    train.rand.cols[train.rands[,i] == name,i] <- temp.tbl[j]
+    test.rand.cols[test.rands[,i] == name,i] <- temp.tbl[j]
+  }
 }
+
 
 # Median impute NAs in the continuous data (since NAhood has been stored in separate variables)
 
@@ -132,7 +128,7 @@ test.num<-as.data.frame(cbind(test.num,test.rand.cols[names(test.rand.cols)!='ID
 train.num$origin<-'train'
 test.num$origin<-'test'
 
-num <- as.data.frame(rbind(train.num[3:dim(train.num)[2]],test.num[2:dim(test.num)[2]]))
+num <- as.data.frame(rbind(train.num[,3:dim(train.num)[2]],test.num[,2:dim(test.num)[2]]))
 
 #Engineer the variables
 # Remove any variables with zero variance
@@ -141,7 +137,7 @@ num.zv<-predict(zv.mod,newdata=num)
 
 # Find the pairwise correlation of remaining variables (start with the continuous variables)
 # Categorical variables will be added once the correlated continuous variables have been removed
-cor.names = c(names(num.zv)[1:113],'glmerPreds')
+cor.names = names(num.zv)[!(grepl('isNA|\\.|origin',names(num.zv)))]
 tests<-expand.grid(x=cor.names,y=cor.names,cor=NA)
 
 tests<-subset(tests,x!=y)
@@ -185,7 +181,7 @@ for (i in 1:dim(new.tests2)[1]) {
   }
 }
 
-num2<-num.zv[,!(names(num.zv)%in%c(removes,paste0('isNA',removes)))]
+num2<-num.zv[,!(names(num.zv)%in%removes)]
 
 # Now include the categorical and isNA variables in correlation and other calculations
 cor.names = c(names(num2)[names(num2)!='origin'])
@@ -239,7 +235,7 @@ for (i in 1:dim(new.tests2)[1]) {
 
 num3<-num2[,!(names(num2)%in%c(removes))]
 
-write.csv(num3[num3$origin=='train',names(num3)!='origin'],file='trainfe.csv',quote=F,row.names=F)
-write.csv(train.num[,2],file='yfe.csv',quote=F,row.names=F)
-write.csv(num3[num3$origin=='test',names(num3)!='origin'],file='testfe.csv',quote=F,row.names=F)
-write.csv(test.num[,1],file='testids.csv',quote=F,row.names=F)
+write.csv(num3[num3$origin=='train',names(num3)!='origin'],file='../trainfe.csv',quote=F,row.names=F)
+write.csv(train.num[,2],file='../yfe.csv',quote=F,row.names=F)
+write.csv(num3[num3$origin=='test',names(num3)!='origin'],file='../testfe.csv',quote=F,row.names=F)
+write.csv(test.num[,1],file='../testids.csv',quote=F,row.names=F)

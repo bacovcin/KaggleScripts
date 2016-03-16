@@ -224,9 +224,9 @@ def fit_ensemble(classifiers,
 
 if __name__ == "__main__":
     print('Loading Dataset...')
-    train = pd.read_csv('trainfe.csv')
-    test = pd.read_csv('testfe.csv')
-    y = np.array(pd.read_csv('yfe.csv'))[:, 0]
+    train = pd.read_csv('../trainfe.csv')
+    test = pd.read_csv('../testfe.csv')
+    y = np.array(pd.read_csv('../yfe.csv'))[:, 0]
 
     # Extract targets and reset to -1/1 coding
     y[y == 0] = -1
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     testx = np.array(test)
 
     # Load test IDs
-    testIDs = np.array(pd.read_csv('testids.csv'))[:, 0]
+    testIDs = np.array(pd.read_csv('../testids.csv'))[:, 0]
 
     # Fit the ensemble to data set
     print('Running Bootstraps...')
