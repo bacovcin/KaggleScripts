@@ -3,8 +3,8 @@ library('lme4')
 
 # Choose the R2 cutoff for eliminating overly correlated variables
 
-r2cutoff = 0.9
-cat.level.min = 20
+r2cutoff = 0.95
+cat.level.min = 30
 # Load the data set
 
 # train<-read.csv('train.csv')

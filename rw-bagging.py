@@ -6,9 +6,11 @@ from skxgboost import skxgboost
 from sklearn import ensemble as ens
 from sklearn import linear_model as lm
 from sklearn import calibration
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA, FastICA
 # from sklearn import neighbors as nb
 from sklearn.metrics import log_loss
-# from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import GaussianNB
 
 # Define global variables
 # Types of models to fit
@@ -35,6 +37,12 @@ models = [
                  "colsample_bytree": 0.45,
                  "max_depth": 11
                     }, 500),
+          calibration.CalibratedClassifierCV(GaussianNB(),
+                                             cv=10,
+                                             method='isotonic'),
+          calibration.CalibratedClassifierCV(lm.Perceptron(n_jobs=-1),
+                                             cv=10,
+                                             method='isotonic'),
           calibration.CalibratedClassifierCV(lm.LogisticRegression(n_jobs=-1),
                                              cv=2,
                                              method='isotonic'),
@@ -42,11 +50,11 @@ models = [
                                      min_samples_split=1, n_jobs=-1)]
 
 init_models = 10     # Number of chances for initial model probabilities
-init_features = .8   # Initial probability of a feature being included
+init_features = .4   # Initial probability of a feature being included
 
-min_iters = 30       # Minimum mumber of iterations
-stop_len = 10        # Number of worse models for stopping criterion
-store_len = 20       # Number of models to store for ensemble
+min_iters = 100       # Minimum mumber of iterations
+stop_len = 50        # Number of worse models for stopping criterion
+store_len = 60       # Number of models to store for ensemble
 
 boot_alpha = 2       # Alpha for beta distribution on boot percentage
 boot_beta = 5        # Beta for beta distribution on boot percentage
@@ -232,8 +240,23 @@ if __name__ == "__main__":
     y[y == 0] = -1
 
     # Extract features
-    x = np.array(train)
-    testx = np.array(test)
+    xunscaled = np.array(train)
+    testxunscaled = np.array(test)
+
+    # Normalize features for non-treebased methods
+    ppMod = StandardScaler.fit(xunscaled)
+    xscaled = ppMod.transform(xunscaled)
+    testxscaled = ppMod.transform(testxunscaled)
+
+    # Run PCA and ICA analysis to meet Naive Bayes assumptions
+    pcaMod = PCA().fit(xscaled)
+
+    xpca = pcaMod.transform(xscaled)
+    testxpca = pcaMod.transform(testxscaled)
+
+    icaMod = FastICA().fit(xpca)
+    x = icaMod.transform(xpca)
+    testx = icaMod.transform(testxpca)
 
     # Load test IDs
     testIDs = np.array(pd.read_csv('../testids.csv'))[:, 0]
@@ -247,7 +270,7 @@ if __name__ == "__main__":
 
     # Write teh results to file
     print('Writting to File...')
-    outfile = open('bagging.csv', 'w')
+    outfile = open('../rw-bagging.csv', 'w')
     outfile.write('ID,PredictedProb\n')
 
     for i in range(len(testoutput[0])):
