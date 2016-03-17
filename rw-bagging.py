@@ -50,7 +50,7 @@ models = [
                                      min_samples_split=1, n_jobs=-1)]
 
 init_models = 10     # Number of chances for initial model probabilities
-init_features = .4   # Initial probability of a feature being included
+feature_c = .008     # Rate at which each subsequent probability for initial
 
 min_iters = 100       # Minimum mumber of iterations
 stop_len = 50        # Number of worse models for stopping criterion
@@ -59,12 +59,12 @@ store_len = 60       # Number of models to store for ensemble
 boot_alpha = 2       # Alpha for beta distribution on boot percentage
 boot_beta = 5        # Beta for beta distribution on boot percentage
 
-main_update = 0.05   # Main probability adjustment for features
-minor_update = 0.02  # Probability adjustement for slightly worse models
+main_update = 0.1    # Main probability adjustment for features
+minor_update = 0.05  # Probability adjustement for slightly worse models
 
-eql_cutoff = 0.02    # Cut off for considering items equal
-minor_cutoff = 0.04  # Cut off for minor reward
-main_cutoff = 0.08   # Cut off for major penalty
+eql_cutoff = 0.01    # Cut off for considering items equal
+minor_cutoff = 0.02  # Cut off for minor reward
+main_cutoff = 0.04   # Cut off for major penalty
 
 model_major = 4      # Update for models that perform better
 model_minor = 2      # Update for models that perform only slighly worse
@@ -116,7 +116,15 @@ def fit_ensemble(classifiers,
 
     # Create the probability matrices for the random walk
     model_prob = np.array([init_models] * len(classifiers))
-    feature_prob = np.array([init_features] * trainx.shape[1])
+    feature_prob = [.99]
+    cur_val = .99
+    for i in range(1, trainx.shape[1]):
+        if cur_val - 0.01 >= feature_c:
+            cur_val -= feature_c
+        feature_prob.append(cur_val)
+
+    feature_prob = np.array(feature_prob)
+    print(feature_prob)
 
     # Create variables to track the random walk bootstraping
     num_losers = 0
@@ -245,7 +253,7 @@ if __name__ == "__main__":
 
     # Normalize features for non-treebased methods
     print('Normalizing...')
-    ppMod = StandardScaler.fit(xunscaled)
+    ppMod = StandardScaler().fit(xunscaled)
     xscaled = ppMod.transform(xunscaled)
     testxscaled = ppMod.transform(testxunscaled)
 
@@ -255,6 +263,13 @@ if __name__ == "__main__":
 
     x = pcaMod.transform(xscaled)
     testx = pcaMod.transform(testxscaled)
+
+    # Print the cumulative sum of the variance explained for each score
+    evr = pcaMod.explained_variance_ratio_
+    cum_sum = 0
+    for i in range(len(evr)):
+        cum_sum += evr[i]
+        print(str(i) + ": {0:.5f}".format(cum_sum))
 
     # Load test IDs
     testIDs = np.array(pd.read_csv('../testids.csv'))[:, 0]
