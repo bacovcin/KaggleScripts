@@ -23,11 +23,11 @@ base_models = [
                  "min_child_weight": 1,
                  "subsample": 0.96,
                  "colsample_bytree": 0.45,
-                 "max_depth": 12
-                    }, 500), 25),
-          ("PLS", 25),
+                 "max_depth": 15
+                    }, 500), 10),
+          ("PLS", 10),
           (ens.RandomForestClassifier(n_estimators=128, max_depth=None,
-                                      min_samples_split=1, n_jobs=-1), 25)]
+                                      min_samples_split=1, n_jobs=-1), 10)]
 
 
 ensemble_models = [
@@ -92,7 +92,7 @@ def fit_ensemble_model(classifiers, y,
                                                col_beta), 0.99])])))
             tx = trainx[boot_rows[:, None],
                         boot_cols]          # Get the boot training scores
-            print(tx.shape())
+            print(tx.shape)
             ty = np.array(y[boot_rows])     # Get the boot training classes
 
             # Fit the classifier on the subset
