@@ -1,15 +1,22 @@
 library('caret')
 library('lme4')
 
+# Assumes the following data structure:
+# train.csv has columns ID,target,features...
+# test.csv has columns ID,features...
+
 # Choose the R2 cutoff for eliminating overly correlated variables
 
-r2cutoff = 0.95
-cat.level.min = 30
+r2cutoff = 0.8
+cat.level.min = 150
 # Load the data set
 
 # train<-read.csv('train.csv')
 # test<-read.csv('test.csv')
 
+# Identify the original number of columns
+
+# varNum = dim(train)[2]
 
 # Add a new column equal to the number of NAs per row
 
@@ -26,8 +33,8 @@ cat.level.min = 30
 
 # Rename the new columns to be 'isNA' + variable name
 
-# names(train)<-c('ID','target',paste('v',seq(1,131),sep=''),'NumNA',paste('isNAv',seq(1,131),sep=''))
-# names(test)<-c('ID',paste('v',seq(1,131),sep=''),'NumNA',paste('isNAv',seq(1,131),sep=''))
+# names(train)<-c('ID','target',paste('v',seq(1,varNum,sep=''),'NumNA',paste('isNAv',varNum,sep=''))
+# names(test)<-c('ID',paste('v',seq(1,varNum),sep=''),'NumNA',paste('isNAv',seq(1,varNum),sep=''))
 
 # Save the new datasets for easier future access
 
@@ -168,7 +175,7 @@ for (i in 1:dim(new.tests)[1]) {
 new.tests2 = new.tests[order(-new.tests$R2),]
 
 
-#Keep removing variables and identify highly predicatable predictors for removal (R2 > )
+#Keep removing variables and identify highly predicatable predictors for removal
 
 removes<-NULL
 
@@ -220,7 +227,7 @@ for (i in 1:dim(new.tests)[1]) {
 new.tests2 = new.tests[order(-new.tests$R2),]
 
 
-#Keep removing variables and identify highly predicatable predictors for removal (R2 > .9)
+#Keep removing variables and identify highly predicatable predictors for removal
 
 removes<-NULL
 

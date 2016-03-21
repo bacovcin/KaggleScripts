@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import numpy as np
 from skxgboost import skxgboost
@@ -12,6 +13,10 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.cross_decomposition import PLSRegression
 
 # Define global variables
+
+holdout_testing = True
+holdout_prop = 0.1
+
 # Types of models to fit
 base_models = [
           (skxgboost({
@@ -23,27 +28,32 @@ base_models = [
                  "min_child_weight": 1,
                  "subsample": 0.96,
                  "colsample_bytree": 0.45,
-                 "max_depth": 15
-                    }, 500), 10),
-          ("PLS", 10),
-          (ens.RandomForestClassifier(n_estimators=128, max_depth=None,
-                                      min_samples_split=1, n_jobs=-1), 10)]
+                 "max_depth": 10
+                    }, 500), 20),
+          (ens.ExtraTreesClassifier(n_estimators=700,
+                                    max_features=50,
+                                    criterion='entropy',
+                                    min_samples_split=5,
+                                    max_depth=50,
+                                    min_samples_leaf=5), 20),
+          ("PLS", 30)]
 
-
+# Tuples of models and number of iterations to run on the output of the
+# base models
 ensemble_models = [
-          calibration.CalibratedClassifierCV(GaussianNB(),
-                                             cv=10,
-                                             method='isotonic'),
-          calibration.CalibratedClassifierCV(lm.Perceptron(n_jobs=-1),
-                                             cv=10,
-                                             method='isotonic'),
-          calibration.CalibratedClassifierCV(lm.LogisticRegression(n_jobs=-1),
-                                             cv=2,
-                                             method='isotonic')]
+          (ens.RandomForestClassifier(n_estimators=128, max_depth=None,
+                                      min_samples_split=1, n_jobs=-1), 50),
+          (calibration.CalibratedClassifierCV(GaussianNB(),
+                                              cv=10,
+                                              method='isotonic'), 30),
+          (calibration.CalibratedClassifierCV(lm.Perceptron(n_jobs=-1),
+                                              cv=10,
+                                              method='isotonic'), 30),
+          (calibration.CalibratedClassifierCV(lm.LogisticRegression(n_jobs=-1),
+                                              cv=2,
+                                              method='isotonic'), 30)]
 
-base_prop = 0.1                   # Proportion of data to use in base bootstraps
-
-number_of_ensembles = 33          # Number of ensembles of each type
+base_prop = 0.2                  # Proportion of data to use in base bootstraps
 
 # Parameters for the beta function to determine ensemble bootstrap proportions
 row_alpha = 2
@@ -53,11 +63,11 @@ col_alpha = 2
 col_beta = 2
 
 # Weighted average uses 1/(OOB_logloss ** weight_factor)
-weight_factor = 5
+weight_factor = 2
 
 # Output = (unweighted average * (1 - weight_scale) +
 #          (weighted average * weight_scale)
-weight_scale = .6
+weight_scale = .9
 
 np.random.seed(69)
 
@@ -70,7 +80,9 @@ def fit_ensemble_model(classifiers, y,
     """
     weights = []
     testProbs = []
-    for clf in classifiers:
+    for classifier in classifiers:
+        clf = classifier[0]
+        number_of_ensembles = classifier[1]
         for i in range(number_of_ensembles):
             print(i)
             print(clf)
@@ -86,10 +98,11 @@ def fit_ensemble_model(classifiers, y,
                                      set(boot_rows)))
             boot_cols = np.random.choice(
                 trainx.shape[1],
-                round(trainx.shape[1] *
-                      max([0.01,
-                           min([np.random.beta(col_alpha,
-                                               col_beta), 0.99])])))
+                max([1,
+                     round(trainx.shape[1] *
+                           max([0.01,
+                                min([np.random.beta(col_alpha,
+                                                    col_beta), 0.99])]))]))
             tx = trainx[boot_rows[:, None],
                         boot_cols]          # Get the boot training scores
             print(tx.shape)
@@ -147,6 +160,8 @@ def fit_base_model(classifiers, fully, dummyY, trainx, testx):
                                           round(trainx.shape[0] * base_prop),
                                           True)
             oob_rows = list(set(range(trainx.shape[0])) - set(train_rows))
+            print(len(train_rows))
+            print(len(oob_rows))
             x = trainx[train_rows, :]
             if clf[0] == 'PLS':
                 y = dummyY[train_rows, :]
@@ -173,7 +188,6 @@ def fit_base_model(classifiers, fully, dummyY, trainx, testx):
 if __name__ == "__main__":
     print('Loading Dataset...')
     train = pd.read_csv('../trainfe.csv')
-    test = pd.read_csv('../testfe.csv')
     yload = pd.read_csv('../yfe.csv')
     y = np.array(yload)[:, 0]
 
@@ -183,7 +197,31 @@ if __name__ == "__main__":
 
     # Extract features
     xunscaled = np.array(train)
-    testxunscaled = np.array(test)
+
+    # Load testing or create holdout set
+    if holdout_testing:
+        # Set a new seed for each run, so that we get different holdout sets
+        # for each run, in order to get a sense of the distribution of
+        # holdout scores.
+        np.random.seed(round(time.time()))
+        holdout_rows = np.random.choice(xunscaled.shape[0],
+                                        round(holdout_prop *
+                                              xunscaled.shape[0]))
+        train_rows = list(set(range(xunscaled.shape[0])) -
+                          set(holdout_rows))
+        testxunscaled = xunscaled[holdout_rows, :]
+        xunscaled = xunscaled[train_rows, :]
+        holdout_y = y[holdout_rows]
+        dummyY = dummyY[train_rows]
+        y = y[train_rows]
+        print(testxunscaled.shape)
+        print(holdout_y.shape)
+        print(xunscaled.shape)
+        print(dummyY.shape)
+        print(y.shape)
+    else:
+        test = pd.read_csv('../testfe.csv')
+        testxunscaled = np.array(test)
 
     # Normalize features for non-treebased methods
     print('Normalizing...')
@@ -216,15 +254,25 @@ if __name__ == "__main__":
     testprob = fit_ensemble_model(ensemble_models, y,
                                   trainarray, testarray)
 
-    testoutput = [list(testIDs), list(testprob)]
+    if holdout_testing:
+        sprob = list(testprob)
+        fprob = list(1 - np.array(testprob))
+        print(np.array(sprob))
+        print(np.array(fprob))
+        print(holdout_y)
+        print('Holdout Logloss: ' + str(log_loss(holdout_y,
+                                                 np.array([fprob,
+                                                          sprob]).transpose())))
+    else:
+        testoutput = [list(testIDs), list(testprob)]
 
-    # Write the results to file
-    print('Writting to File...')
-    outfile = open('../stacking.csv', 'w')
-    outfile.write('ID,PredictedProb\n')
+        # Write the results to file
+        print('Writting to File...')
+        outfile = open('../stacking.csv', 'w')
+        outfile.write('ID,PredictedProb\n')
 
-    for i in range(len(testoutput[0])):
-        outfile.write(str(testoutput[0][i]) + ',' +
-                      str(min([1,
-                               max([testoutput[1][i],
-                                    0])])) + '\n')
+        for i in range(len(testoutput[0])):
+            outfile.write(str(testoutput[0][i]) + ',' +
+                          str(min([1,
+                                   max([testoutput[1][i],
+                                        0])])) + '\n')
